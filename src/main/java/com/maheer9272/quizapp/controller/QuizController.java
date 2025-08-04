@@ -1,13 +1,9 @@
 package com.maheer9272.quizapp.controller;
 
-
-
 import com.maheer9272.quizapp.model.QuestionWrapper;
 import com.maheer9272.quizapp.service.QuizService;
-
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 

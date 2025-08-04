@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
 @RestController
@@ -31,12 +30,14 @@ public class QuestionController {
     }
 
     @PostMapping("/add")
-    public String addQuestion(@RequestBody Question question){
-        return questionService.addQuestion(question);
+    public ResponseEntity<String> addQuestion(@RequestBody Question question) {
+        String result = questionService.addQuestion(question);
+        return new ResponseEntity<>(result, HttpStatus.CREATED);
     }
 
     @DeleteMapping("/delete/{id}")
-        public String deleteQuestion(@PathVariable int id){
-        return questionService.deleteQuestion(id);
+    public ResponseEntity<String> deleteQuestion(@PathVariable int id) {
+        String result = questionService.deleteQuestion(id);
+        return new ResponseEntity<>(result, HttpStatus.OK);
     }
 }
