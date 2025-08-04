@@ -13,7 +13,6 @@ public class QuestionController {
 
     @Autowired
     private final QuestionService questionService;
-
     public QuestionController(QuestionService questionService) {
         this.questionService = questionService;
     }
@@ -22,7 +21,6 @@ public class QuestionController {
     public ResponseEntity<List<Question>> getALllQuestions(){
         return questionService.getAllQuestions();
     }
-
 
     @GetMapping("/allquestions/{category}")
     public List<Question> getQuestionByCategory(@PathVariable String category){
@@ -38,6 +36,12 @@ public class QuestionController {
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<String> deleteQuestion(@PathVariable int id) {
         String result = questionService.deleteQuestion(id);
+
+        // Check if deletion was successful
+        if (result.contains("not found")) {
+            return new ResponseEntity<>(result, HttpStatus.NOT_FOUND);
+        }
+
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
 }
