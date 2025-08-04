@@ -40,5 +40,4 @@ public class QuestionController {
         String result = questionService.deleteQuestion(id);
         return new ResponseEntity<>(result, HttpStatus.OK);
     }
-
 }
