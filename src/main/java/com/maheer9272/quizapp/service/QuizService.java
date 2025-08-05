@@ -4,6 +4,7 @@ package com.maheer9272.quizapp.service;
 import com.maheer9272.quizapp.model.Question;
 import com.maheer9272.quizapp.model.QuestionWrapper;
 import com.maheer9272.quizapp.model.Quiz;
+import com.maheer9272.quizapp.model.Response;
 import com.maheer9272.quizapp.repository.QuestionServiceRepository;
 import com.maheer9272.quizapp.repository.QuizServiceRepository;
 import org.hibernate.Hibernate;
@@ -53,6 +54,21 @@ public class QuizService {
             questionsForUser.add(qw);
         }
         return new ResponseEntity<>(questionsForUser, HttpStatus.OK);
+    }
+
+    @Transactional
+    public ResponseEntity<Integer> calculateResult(Integer id, List<Response> responses) {
+        Quiz quiz = quizServiceRepository.findById(id).orElseThrow(() -> new RuntimeException("Quiz not found"));
+        List<Question> questions = quiz.getQuestions();
+        int right = 0;
+        int i = 0;
+        for (Response response : responses) {
+            if (response.getResponse().equals(questions.get(i).getRightAnswer())) {
+                right++;
+            }
+            i++;
+        }
+        return new ResponseEntity<>(right, HttpStatus.OK);
     }
 
 }
