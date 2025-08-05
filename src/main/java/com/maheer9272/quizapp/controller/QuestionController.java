@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController()
+@RequestMapping("/admin")
 public class QuestionController {
 
     @Autowired
@@ -36,8 +37,6 @@ public class QuestionController {
     @DeleteMapping("/delete/{id}")
     public ResponseEntity<String> deleteQuestion(@PathVariable int id) {
         String result = questionService.deleteQuestion(id);
-
-        // Check if deletion was successful
         if (result.contains("not found")) {
             return new ResponseEntity<>(result, HttpStatus.NOT_FOUND);
         }
