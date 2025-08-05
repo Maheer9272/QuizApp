@@ -27,7 +27,6 @@ public class QuizService {
         this.questionServiceRepository = questionServiceRepository;
     }
 
-
     public ResponseEntity<String> createQuiz(String category, int numQ, String title) {
         List<Question> questions = questionServiceRepository.findRandomQuestionsByCategory(category, numQ);
         if (questions.isEmpty()) {
