@@ -1,6 +1,7 @@
 package com.maheer9272.quizapp.service;
 
 import com.maheer9272.quizapp.model.Question;
+import com.maheer9272.quizapp.model.QuestionWrapper;
 import com.maheer9272.quizapp.model.Quiz;
 import com.maheer9272.quizapp.repository.QuestionServiceRepository;
 import com.maheer9272.quizapp.repository.QuizServiceRepository;
@@ -44,6 +45,20 @@ public class QuestionService {
         return "Success";
     }
 
+    public ResponseEntity<List<QuestionWrapper>> getQuizQuestions(int id) {
+        Optional<Quiz> quiz = quizServiceRepository.findByIdWithQuestions(id);
+        if (quiz.isEmpty()) {
+            return new ResponseEntity<>(new ArrayList<>(), HttpStatus.NOT_FOUND);
+        }
+        List<Question> questionsFromDB = quiz.get().getQuestions();
+        List<QuestionWrapper> questionsForUser = new ArrayList<>();
+        for (Question q : questionsFromDB) {
+            QuestionWrapper qw = new QuestionWrapper(q.getId(), q.getOption1(), q.getOption2(), q.getOption3(), q.getOption4(), q.getQuestionTitle());
+            questionsForUser.add(qw);
+        }
+        return new ResponseEntity<>(questionsForUser, HttpStatus.OK);
+    }
+
     @Transactional
     public String deleteQuestion(int id) {
         // Check if question exists
@@ -70,5 +85,4 @@ public class QuestionService {
         }
         return "Question deleted successfully";
     }
-
 }

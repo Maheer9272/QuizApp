@@ -1,6 +1,7 @@
 package com.maheer9272.quizapp.controller;
 
 import com.maheer9272.quizapp.model.QuestionWrapper;
+import com.maheer9272.quizapp.model.Response;
 import com.maheer9272.quizapp.service.QuizService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -25,5 +26,10 @@ public class QuizController {
     @GetMapping("/get/{id}")
     public ResponseEntity<List<QuestionWrapper>> getQuizQuestions(@PathVariable int id){
         return quizService.getQuizQuestions(id);
+    }
+
+    @PostMapping("submit/{id}")
+    public ResponseEntity<Integer>scrore(@PathVariable Integer id, @RequestBody List<Response> responses){
+        return quizService.calculateResult(id,responses);
     }
 }
