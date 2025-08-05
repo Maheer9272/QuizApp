@@ -26,4 +26,5 @@ public class QuizController {
     public ResponseEntity<List<QuestionWrapper>> getQuizQuestions(@PathVariable int id){
         return quizService.getQuizQuestions(id);
     }
+
 }
