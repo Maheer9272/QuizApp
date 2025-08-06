@@ -1,5 +1,6 @@
 package com.maheer9272.quizapp.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -8,6 +9,9 @@ import lombok.Data;
 
 @Entity
 @Data
+@Schema(
+        name = "Question body to add to the database"
+)
 public class Question {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

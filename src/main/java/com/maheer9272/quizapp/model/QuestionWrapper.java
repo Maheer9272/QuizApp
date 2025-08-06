@@ -1,8 +1,13 @@
 package com.maheer9272.quizapp.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 @Data
+@Schema(
+        name = "Question sent to the user for attempting the quiz",
+        description = "Question sent to the user for attempting the quiz without the right answer and the id"
+)
 public class QuestionWrapper {
     private Integer id;
     private String questionTitle;
