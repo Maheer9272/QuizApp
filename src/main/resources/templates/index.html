@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuizApp - Interactive Quiz Platform</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="navbar">
+    <div class="nav-container">
+        <h1 class="nav-title">QuizApp</h1>
+        <div class="nav-buttons">
+            <button class="nav-btn" onclick="showSection('home')">Home</button>
+            <button class="nav-btn" onclick="showSection('create-quiz')">Create Quiz</button>
+            <button class="nav-btn" onclick="showSection('admin')">Admin</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    <!-- Home Section -->
+    <section id="home" class="section active">
+        <div class="hero">
+            <h2>Welcome to QuizApp</h2>
+            <p>Test your knowledge with our interactive quizzes!</p>
+            <button class="btn btn-primary" onclick="showSection('create-quiz')">Start Quiz</button>
+        </div>
+
+        <div class="quiz-list">
+            <h3>Available Quizzes</h3>
+            <div id="quiz-cards" class="quiz-cards">
+                <!-- Quiz cards will be populated here -->
+            </div>
+        </div>
+    </section>
+
+    <!-- Create Quiz Section -->
+    <section id="create-quiz" class="section">
+        <div class="form-container">
+            <h2>Create New Quiz</h2>
+            <form id="create-quiz-form">
+                <div class="form-group">
+                    <label for="quiz-title">Quiz Title:</label>
+                    <input type="text" id="quiz-title" required>
+                </div>
+                <div class="form-group">
+                    <label for="quiz-category">Category:</label>
+                    <select id="quiz-category" required>
+                        <option value="">Select Category</option>
+                        <option value="science">Science</option>
+                        <option value="history">History</option>
+                        <option value="technology">Technology</option>
+                        <option value="sports">Sports</option>
+                        <option value="general">General Knowledge</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="num-questions">Number of Questions:</label>
+                    <input type="number" id="num-questions" min="1" max="20" value="5" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Quiz</button>
+            </form>
+        </div>
+    </section>
+
+    <!-- Quiz Taking Section -->
+    <section id="take-quiz" class="section">
+        <div class="quiz-container">
+            <div id="quiz-header">
+                <h2 id="quiz-title-display"></h2>
+                <div class="progress-bar">
+                    <div id="progress" class="progress"></div>
+                </div>
+                <p id="question-counter">Question 1 of 5</p>
+            </div>
+
+            <div id="question-container">
+                <h3 id="question-text"></h3>
+                <div id="options-container" class="options">
+                    <!-- Options will be populated here -->
+                </div>
+            </div>
+
+            <div class="quiz-controls">
+                <button id="prev-btn" class="btn btn-secondary" onclick="previousQuestion()">Previous</button>
+                <button id="next-btn" class="btn btn-primary" onclick="nextQuestion()">Next</button>
+                <button id="submit-btn" class="btn btn-success" onclick="submitQuiz()" style="display: none;">Submit Quiz</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section id="results" class="section">
+        <div class="results-container">
+            <h2>Quiz Results</h2>
+            <div id="score-display" class="score-display">
+                <div id="score-circle" class="score-circle">
+                    <span id="score-text">0%</span>
+                </div>
+                <p id="score-message"></p>
+            </div>
+            <button class="btn btn-primary" onclick="showSection('home')">Take Another Quiz</button>
+        </div>
+    </section>
+
+    <!-- Admin Section -->
+    <section id="admin" class="section">
+        <div class="admin-container">
+            <h2>Admin Panel</h2>
+
+            <div class="admin-tabs">
+                <button class="tab-btn active" onclick="showTab('add-question')">Add Question</button>
+                <button class="tab-btn" onclick="showTab('view-questions')">View Questions</button>
+            </div>
+
+            <!-- Add Question Tab -->
+            <div id="add-question" class="tab-content active">
+                <form id="add-question-form">
+                    <div class="form-group">
+                        <label for="question-title">Question:</label>
+                        <textarea id="question-title" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="option1">Option 1:</label>
+                        <input type="text" id="option1" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option2">Option 2:</label>
+                        <input type="text" id="option2" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option3">Option 3:</label>
+                        <input type="text" id="option3" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option4">Option 4:</label>
+                        <input type="text" id="option4" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="correct-answer">Correct Answer:</label>
+                        <select id="correct-answer" required>
+                            <option value="">Select Correct Answer</option>
+                            <option value="option1">Option 1</option>
+                            <option value="option2">Option 2</option>
+                            <option value="option3">Option 3</option>
+                            <option value="option4">Option 4</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="question-category">Category:</label>
+                        <select id="question-category" required>
+                            <option value="">Select Category</option>
+                            <option value="science">Science</option>
+                            <option value="history">History</option>
+                            <option value="technology">Technology</option>
+                            <option value="sports">Sports</option>
+                            <option value="general">General Knowledge</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="difficulty-level">Difficulty Level:</label>
+                        <select id="difficulty-level" required>
+                            <option value="">Select Difficulty</option>
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Question</button>
+                </form>
+            </div>
+
+            <!-- View Questions Tab -->
+            <div id="view-questions" class="tab-content">
+                <div class="filter-container">
+                    <select id="category-filter" onchange="filterQuestions()">
+                        <option value="">All Categories</option>
+                        <option value="science">Science</option>
+                        <option value="history">History</option>
+                        <option value="technology">Technology</option>
+                        <option value="sports">Sports</option>
+                        <option value="general">General Knowledge</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="loadAllQuestions()">Refresh</button>
+                </div>
+                <div id="questions-list" class="questions-list">
+                    <!-- Questions will be populated here -->
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
