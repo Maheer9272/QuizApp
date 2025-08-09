@@ -1,427 +1,407 @@
-// API Base URL - Update this to match your Spring Boot server
-const API_BASE_URL = 'http://localhost:8080';
+// Robust SPA for QuizApp using same-origin API base
+(() => {
+    const API_BASE = window.location.origin;
 
-// Global variables
-let currentQuiz = null;
-let currentQuestionIndex = 0;
-let userAnswers = [];
-let quizQuestions = [];
+    // State
+    let currentQuizId = null;
+    let questions = [];
+    let answers = new Map(); // questionId -> selected value (option1..option4)
+    let idx = 0;
 
-// Initialize the application
-document.addEventListener('DOMContentLoaded', function() {
-    showSection('home');
-    setupEventListeners();
-});
+    // Elements
+    const $ = (id) => document.getElementById(id);
+    const qs = (sel, root = document) => root.querySelector(sel);
+    const qsa = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-// Setup event listeners
-function setupEventListeners() {
-    // Create Quiz Form
-    document.getElementById('create-quiz-form').addEventListener('submit', handleCreateQuiz);
-
-    // Add Question Form
-    document.getElementById('add-question-form').addEventListener('submit', handleAddQuestion);
-}
-
-// Navigation functions
-function showSection(sectionId) {
-    // Hide all sections
-    document.querySelectorAll('.section').forEach(section => {
-        section.classList.remove('active');
-    });
-
-    // Show selected section
-    document.getElementById(sectionId).classList.add('active');
-
-    // Load data for specific sections
-    if (sectionId === 'admin') {
-        loadAllQuestions();
+    // Tabs
+    function showTab(tabId) {
+        qsa('.tab').forEach(s => s.classList.remove('active'));
+        qsa('.tab-btn').forEach(b => b.classList.remove('active'));
+        const tab = $('#' + tabId);
+        if (tab) tab.classList.add('active');
+        const btn = qsa(`.tab-btn[data-tab="${tabId}"]`)[0];
+        if (btn) btn.classList.add('active');
     }
-}
 
-function showTab(tabId) {
-    // Hide all tab contents
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.remove('active');
-    });
-
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('active');
-    });
-
-    // Show selected tab content
-    document.getElementById(tabId).classList.add('active');
-
-    // Add active class to clicked tab button
-    event.target.classList.add('active');
-}
-
-// Quiz creation functions
-async function handleCreateQuiz(event) {
-    event.preventDefault();
-
-    const title = document.getElementById('quiz-title').value;
-    const category = document.getElementById('quiz-category').value;
-    const numQuestions = document.getElementById('num-questions').value;
-
-    try {
-        showLoading('Creating quiz...');
-
-        const response = await fetch(`${API_BASE_URL}/quiz/create?category=${category}&numQ=${numQuestions}&title=${encodeURIComponent(title)}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+    function initTabs() {
+        qsa('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => showTab(btn.dataset.tab));
         });
+    }
 
-        if (response.ok) {
-            const result = await response.text();
-            showSuccess('Quiz created successfully!');
+    // Helpers
+    async function safeFetch(url, options = {}) {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`${res.status} ${res.statusText}: ${text}`);
+        }
+        return res;
+    }
 
-            // Extract quiz ID from response (assuming it returns something like "Quiz created with ID: 123")
-            const quizIdMatch = result.match(/ID:\s*(\d+)/);
-            if (quizIdMatch) {
-                const quizId = parseInt(quizIdMatch[1]);
-                loadQuiz(quizId, title);
+    function setLoading(el, msg) {
+        if (el) { el.textContent = msg; el.classList.remove('error'); el.classList.remove('hidden'); }
+    }
+    function setError(el, msg) {
+        if (el) { el.textContent = msg; el.classList.add('error'); el.classList.remove('hidden'); }
+    }
+    function clearStatus(...els) {
+        els.forEach(el => el && (el.textContent = '', el.classList.remove('error')));
+    }
+
+    // Create Quiz
+    async function handleCreateQuiz(e) {
+        e.preventDefault();
+        clearStatus($('create-quiz-result'));
+        const title = $('quiz-title')?.value?.trim();
+        const category = $('quiz-category')?.value?.trim();
+        const numQ = parseInt($('num-questions')?.value || '0', 10);
+
+        if (!title || !category || !numQ || numQ < 1) {
+            setError($('create-quiz-result'), 'Please provide valid Title, Category and Number of Questions.');
+            return;
+        }
+        setLoading($('create-quiz-result'), 'Creating quiz...');
+
+        try {
+            // Backend expects @RequestParam; send as query string on POST
+            const url = `${API_BASE}/quiz/create?category=${encodeURIComponent(category)}&numQ=${encodeURIComponent(numQ)}&title=${encodeURIComponent(title)}`;
+            const res = await safeFetch(url, { method: 'POST' });
+            const text = await res.text();
+
+            // Try to extract a numeric ID; fall back to showing the message
+            const match = text.match(/(\d+)/);
+            if (match) {
+                currentQuizId = Number(match[1]);
+                $('create-quiz-result').textContent = `Quiz created with ID ${currentQuizId}. Loading questions...`;
+                await loadQuiz(currentQuizId, title);
+                showTab('take-quiz');
             } else {
-                showError('Quiz created but unable to load. Please try again.');
+                $('create-quiz-result').textContent = text || 'Quiz created.';
             }
-        } else {
-            throw new Error('Failed to create quiz');
+        } catch (err) {
+            setError($('create-quiz-result'), `Failed to create quiz: ${err.message}`);
         }
-    } catch (error) {
-        console.error('Error creating quiz:', error);
-        showError('Failed to create quiz. Please try again.');
     }
-}
 
-async function loadQuiz(quizId, title) {
-    try {
-        showLoading('Loading quiz questions...');
-
-        const response = await fetch(`${API_BASE_URL}/quiz/get/${quizId}`);
-
-        if (response.ok) {
-            const questions = await response.json();
-            startQuiz(quizId, title, questions);
-        } else {
-            throw new Error('Failed to load quiz questions');
+    // Load Quiz
+    async function handleLoadQuiz(e) {
+        e.preventDefault();
+        clearStatus($('load-quiz-status'));
+        const id = parseInt($('quiz-id')?.value || '0', 10);
+        if (!id) {
+            setError($('load-quiz-status'), 'Enter a valid Quiz ID.');
+            return;
         }
-    } catch (error) {
-        console.error('Error loading quiz:', error);
-        showError('Failed to load quiz questions. Please try again.');
+        try {
+            setLoading($('load-quiz-status'), 'Loading quiz...');
+            await loadQuiz(id);
+            $('load-quiz-status').textContent = `Quiz #${id} loaded.`;
+            showTab('take-quiz');
+        } catch (err) {
+            setError($('load-quiz-status'), `Failed to load quiz: ${err.message}`);
+        }
     }
-}
 
-function startQuiz(quizId, title, questions) {
-    currentQuiz = { id: quizId, title: title };
-    quizQuestions = questions;
-    currentQuestionIndex = 0;
-    userAnswers = new Array(questions.length).fill(null);
+    async function loadQuiz(id, titleFromCreate) {
+        const res = await safeFetch(`${API_BASE}/quiz/get/${id}`);
+        const data = await res.json();
 
-    document.getElementById('quiz-title-display').textContent = title;
-
-    showSection('take-quiz');
-    displayQuestion();
-}
-
-function displayQuestion() {
-    const question = quizQuestions[currentQuestionIndex];
-    const totalQuestions = quizQuestions.length;
-
-    // Update progress
-    const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
-    document.getElementById('progress').style.width = progress + '%';
-    document.getElementById('question-counter').textContent = `Question ${currentQuestionIndex + 1} of ${totalQuestions}`;
-
-    // Display question
-    document.getElementById('question-text').textContent = question.questionTitle;
-
-    // Display options
-    const optionsContainer = document.getElementById('options-container');
-    optionsContainer.innerHTML = '';
-
-    [question.option1, question.option2, question.option3, question.option4].forEach((option, index) => {
-        const optionElement = document.createElement('div');
-        optionElement.className = 'option';
-        optionElement.textContent = option;
-        optionElement.addEventListener('click', () => selectOption(index, optionElement));
-
-        // Restore previous selection
-        if (userAnswers[currentQuestionIndex] === index) {
-            optionElement.classList.add('selected');
+        if (!Array.isArray(data) || data.length === 0) {
+            throw new Error('No questions returned for this quiz.');
         }
 
-        optionsContainer.appendChild(optionElement);
-    });
+        currentQuizId = id;
+        questions = data;
+        answers = new Map();
+        idx = 0;
 
-    // Update button states
-    document.getElementById('prev-btn').style.display = currentQuestionIndex > 0 ? 'block' : 'none';
-    document.getElementById('next-btn').style.display = currentQuestionIndex < totalQuestions - 1 ? 'block' : 'none';
-    document.getElementById('submit-btn').style.display = currentQuestionIndex === totalQuestions - 1 ? 'block' : 'none';
-}
+        // Title if available
+        const titleEl = $('quiz-title-display');
+        if (titleEl) titleEl.textContent = titleFromCreate || `Quiz #${id}`;
 
-function selectOption(optionIndex, optionElement) {
-    // Remove previous selection
-    document.querySelectorAll('.option').forEach(opt => opt.classList.remove('selected'));
+        $('quiz-loading')?.classList.add('hidden');
+        $('quiz-error')?.classList.add('hidden');
+        $('quiz-area')?.classList.remove('hidden');
 
-    // Add selection to clicked option
-    optionElement.classList.add('selected');
-
-    // Store user answer
-    userAnswers[currentQuestionIndex] = optionIndex;
-}
-
-function previousQuestion() {
-    if (currentQuestionIndex > 0) {
-        currentQuestionIndex--;
-        displayQuestion();
-    }
-}
-
-function nextQuestion() {
-    if (currentQuestionIndex < quizQuestions.length - 1) {
-        currentQuestionIndex++;
-        displayQuestion();
-    }
-}
-
-async function submitQuiz() {
-    if (userAnswers.includes(null)) {
-        showError('Please answer all questions before submitting.');
-        return;
+        renderQuestion();
+        updateNav();
     }
 
-    try {
-        showLoading('Calculating your score...');
+    function extractOptions(q) {
+        // Try option1..option4
+        const optKeys = ['option1', 'option2', 'option3', 'option4'].filter(k => q[k]);
+        if (optKeys.length) {
+            return optKeys.map(k => ({ key: k, text: q[k] }));
+        }
+        // Fallback: any keys starting with option
+        const dynamic = Object.keys(q).filter(k => /^option/i.test(k)).map(k => ({ key: k, text: q[k] }));
+        if (dynamic.length) return dynamic;
+        // Last resort: array field
+        if (Array.isArray(q.options)) {
+            return q.options.map((text, i) => ({ key: `option${i + 1}`, text }));
+        }
+        return [];
+    }
 
-        // Format responses for API
-        const responses = userAnswers.map((answerIndex, questionIndex) => {
-            const question = quizQuestions[questionIndex];
-            const options = [question.option1, question.option2, question.option3, question.option4];
+    function renderQuestion() {
+        const q = questions[idx];
+        if (!q) return;
 
-            return {
-                id: question.id,
-                response: options[answerIndex]
-            };
+        const qText = q.questionTitle || q.title || q.question || `Question ${idx + 1}`;
+        $('question-text').textContent = qText;
+
+        const options = extractOptions(q);
+        const container = $('options-container');
+        container.innerHTML = '';
+
+        const selected = answers.get(q.id) || null;
+
+        options.forEach(opt => {
+            const id = `q${q.id}_${opt.key}`;
+            const wrap = document.createElement('label');
+            wrap.className = 'option';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = `q_${q.id}`;
+            input.value = opt.key;
+            input.id = id;
+            if (selected === opt.key) input.checked = true;
+            input.addEventListener('change', () => {
+                answers.set(q.id, opt.key);
+                updateNav();
+            });
+
+            const span = document.createElement('span');
+            span.textContent = opt.text;
+
+            wrap.appendChild(input);
+            wrap.appendChild(span);
+            container.appendChild(wrap);
         });
 
-        const response = await fetch(`${API_BASE_URL}/quiz/submit/${currentQuiz.id}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(responses)
+        $('question-counter').textContent = `${idx + 1}/${questions.length}`;
+    }
+
+    function updateNav() {
+        $('prev-btn').disabled = idx === 0;
+        $('next-btn').disabled = idx >= questions.length - 1;
+        const allAnswered = questions.every(q => answers.has(q.id));
+        $('submit-btn').disabled = !allAnswered || questions.length === 0;
+    }
+
+    function go(delta) {
+        const ni = idx + delta;
+        if (ni < 0 || ni >= questions.length) return;
+        idx = ni;
+        renderQuestion();
+        updateNav();
+    }
+
+    async function handleSubmitQuiz() {
+        if (!currentQuizId || questions.length === 0) return;
+
+        // Build payload expected by backend: List<Response> where each has id and response
+        const payload = questions
+            .map(q => ({ id: q.id, response: answers.get(q.id) }))
+            .filter(x => x.id != null && x.response != null);
+
+        if (payload.length !== questions.length) {
+            setError($('quiz-error'), 'Please answer all questions.');
+            return;
+        }
+
+        try {
+            $('quiz-error').classList.add('hidden');
+            $('submit-btn').disabled = true;
+            $('submit-btn').textContent = 'Submitting...';
+
+            const res = await safeFetch(`${API_BASE}/quiz/submit/${currentQuizId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            // Backend returns integer score (JSON or text)
+            let score;
+            const ct = res.headers.get('content-type') || '';
+            if (ct.includes('application/json')) {
+                score = await res.json();
+            } else {
+                const text = await res.text();
+                score = parseInt(text, 10);
+            }
+            if (Number.isNaN(score)) {
+                throw new Error('Unexpected score response.');
+            }
+
+            showResults(score, questions.length);
+        } catch (err) {
+            setError($('quiz-error'), `Submit failed: ${err.message}`);
+        } finally {
+            $('submit-btn').textContent = 'Submit';
+            updateNav();
+        }
+    }
+
+    function showResults(score, total) {
+        const pct = Math.round((score / total) * 100);
+        $('score-text').textContent = `Score: ${score}/${total} (${pct}%)`;
+        $('score-message').textContent =
+            pct === 100 ? 'Perfect! 🎉' :
+                pct >= 80 ? 'Great job! ✅' :
+                    pct >= 50 ? 'Good effort! 👍' :
+                        'Keep practicing! 💪';
+
+        $('results').classList.remove('hidden');
+        showTab('take-quiz');
+    }
+
+    function resetToHome() {
+        currentQuizId = null;
+        questions = [];
+        answers = new Map();
+        idx = 0;
+
+        $('quiz-area')?.classList.add('hidden');
+        $('quiz-loading').classList.remove('hidden');
+        $('quiz-loading').textContent = 'Load a quiz to begin.';
+        $('results').classList.add('hidden');
+        $('quiz-error').classList.add('hidden');
+
+        showTab('home');
+    }
+
+    // Admin
+    async function handleAddQuestion(e) {
+        e.preventDefault();
+        clearStatus($('add-question-status'));
+        const questionTitle = $('question-title')?.value?.trim();
+        const option1 = $('option1')?.value?.trim();
+        const option2 = $('option2')?.value?.trim();
+        const option3 = $('option3')?.value?.trim();
+        const option4 = $('option4')?.value?.trim();
+        const correct = $('correct-answer')?.value;
+        const difficultyLevel = $('difficulty-level')?.value;
+        const category = $('question-category')?.value?.trim();
+
+        if (!questionTitle || !option1 || !option2 || !option3 || !option4 || !correct || !difficultyLevel || !category) {
+            setError($('add-question-status'), 'Please fill in all fields.');
+            return;
+        }
+
+        const body = {
+            questionTitle,
+            option1, option2, option3, option4,
+            rightAnswer: correct,       // common field name used in many variants
+            difficultyLevel,
+            category,
+        };
+
+        try {
+            setLoading($('add-question-status'), 'Adding question...');
+            const res = await safeFetch(`${API_BASE}/admin/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const text = await res.text();
+            $('add-question-status').textContent = text || 'Question added.';
+            $('add-question-form').reset();
+            await refreshQuestions();
+        } catch (err) {
+            setError($('add-question-status'), `Failed to add: ${err.message}`);
+        }
+    }
+
+    async function fetchQuestions(category) {
+        const url = category && category.trim()
+            ? `${API_BASE}/admin/allquestions/${encodeURIComponent(category.trim())}`
+            : `${API_BASE}/admin/allquestions`;
+        const res = await safeFetch(url);
+        return res.json();
+    }
+
+    function renderQuestionsList(list) {
+        const wrap = $('questions-list');
+        wrap.innerHTML = '';
+        if (!Array.isArray(list) || list.length === 0) {
+            wrap.innerHTML = '<p class="muted">No questions found.</p>';
+            return;
+        }
+        list.forEach(q => {
+            const card = document.createElement('div');
+            card.className = 'list-item';
+            const title = q.questionTitle || q.title || q.question || `Question ${q.id}`;
+            const meta = `
+        <div class="meta">
+          <span>#${q.id}</span>
+          <span>${q.category || 'No category'}</span>
+          <span>${q.difficultyLevel || 'No difficulty'}</span>
+        </div>
+      `;
+            card.innerHTML = `
+        <div class="content">
+          <strong>${title}</strong>
+          ${meta}
+        </div>
+        <div class="actions">
+          <button class="danger" data-delete="${q.id}">Delete</button>
+        </div>
+      `;
+            wrap.appendChild(card);
         });
 
-        if (response.ok) {
-            const score = await response.json();
-            displayResults(score);
-        } else {
-            throw new Error('Failed to submit quiz');
-        }
-    } catch (error) {
-        console.error('Error submitting quiz:', error);
-        showError('Failed to submit quiz. Please try again.');
-    }
-}
-
-function displayResults(score) {
-    const totalQuestions = quizQuestions.length;
-    const percentage = Math.round((score / totalQuestions) * 100);
-
-    document.getElementById('score-text').textContent = `${percentage}%`;
-    document.getElementById('score-message').textContent =
-        `You scored ${score} out of ${totalQuestions} questions correctly!`;
-
-    showSection('results');
-}
-
-// Admin functions
-async function handleAddQuestion(event) {
-    event.preventDefault();
-
-    const questionData = {
-        questionTitle: document.getElementById('question-title').value,
-        option1: document.getElementById('option1').value,
-        option2: document.getElementById('option2').value,
-        option3: document.getElementById('option3').value,
-        option4: document.getElementById('option4').value,
-        rightAnswer: document.getElementById(document.getElementById('correct-answer').value).value,
-        category: document.getElementById('question-category').value,
-        difficultylevel: document.getElementById('difficulty-level').value
-    };
-
-    try {
-        showLoading('Adding question...');
-
-        const response = await fetch(`${API_BASE_URL}/admin/add`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(questionData)
+        qsa('button[data-delete]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-delete');
+                if (!id) return;
+                btn.disabled = true;
+                btn.textContent = 'Deleting...';
+                try {
+                    const res = await safeFetch(`${API_BASE}/admin/delete/${id}`, { method: 'DELETE' });
+                    const text = await res.text();
+                    await refreshQuestions();
+                } catch (err) {
+                    alert(`Delete failed: ${err.message}`);
+                }
+            });
         });
+    }
 
-        if (response.ok) {
-            const result = await response.text();
-            showSuccess('Question added successfully!');
-            document.getElementById('add-question-form').reset();
-            loadAllQuestions();
-        } else {
-            throw new Error('Failed to add question');
+    async function refreshQuestions() {
+        try {
+            const cat = $('category-filter')?.value || '';
+            const list = await fetchQuestions(cat);
+            renderQuestionsList(list);
+        } catch (err) {
+            $('questions-list').innerHTML = `<p class="error">Failed to load questions: ${err.message}</p>`;
         }
-    } catch (error) {
-        console.error('Error adding question:', error);
-        showError('Failed to add question. Please try again.');
-    }
-}
-
-async function loadAllQuestions() {
-    try {
-        showLoading('Loading questions...');
-
-        const response = await fetch(`${API_BASE_URL}/admin/allquestions`);
-
-        if (response.ok) {
-            const questions = await response.json();
-            displayQuestions(questions);
-        } else {
-            throw new Error('Failed to load questions');
-        }
-    } catch (error) {
-        console.error('Error loading questions:', error);
-        showError('Failed to load questions. Please try again.');
-    }
-}
-
-function displayQuestions(questions) {
-    const questionsList = document.getElementById('questions-list');
-    questionsList.innerHTML = '';
-
-    if (questions.length === 0) {
-        questionsList.innerHTML = '<p>No questions found.</p>';
-        return;
     }
 
-    questions.forEach(question => {
-        const questionElement = document.createElement('div');
-        questionElement.className = 'question-item';
-        questionElement.innerHTML = `
-            <h4>${question.questionTitle}</h4>
-            <p><strong>Options:</strong> ${question.option1}, ${question.option2}, ${question.option3}, ${question.option4}</p>
-            <p><strong>Correct Answer:</strong> ${question.rightAnswer}</p>
-            <div class="question-meta">
-                <div>
-                    <span class="question-category">${question.category}</span>
-                    <span class="question-difficulty">${question.difficultylevel}</span>
-                </div>
-                <button class="delete-btn" onclick="deleteQuestion(${question.id})">Delete</button>
-            </div>
-        `;
-        questionsList.appendChild(questionElement);
-    });
-}
+    function wireEvents() {
+        $('create-quiz-form')?.addEventListener('submit', handleCreateQuiz);
+        $('load-quiz-form')?.addEventListener('submit', handleLoadQuiz);
 
-async function filterQuestions() {
-    const category = document.getElementById('category-filter').value;
+        $('prev-btn')?.addEventListener('click', () => go(-1));
+        $('next-btn')?.addEventListener('click', () => go(1));
+        $('submit-btn')?.addEventListener('click', handleSubmitQuiz);
+        $('retry-btn')?.addEventListener('click', resetToHome);
 
-    if (!category) {
-        loadAllQuestions();
-        return;
+        $('add-question-form')?.addEventListener('submit', handleAddQuestion);
+        $('filter-btn')?.addEventListener('click', (e) => { e.preventDefault(); refreshQuestions(); });
+        $('refresh-btn')?.addEventListener('click', (e) => { e.preventDefault(); $('category-filter').value = ''; refreshQuestions(); });
     }
 
-    try {
-        showLoading('Filtering questions...');
-
-        const response = await fetch(`${API_BASE_URL}/admin/allquestions/${category}`);
-
-        if (response.ok) {
-            const questions = await response.json();
-            displayQuestions(questions);
-        } else {
-            throw new Error('Failed to filter questions');
-        }
-    } catch (error) {
-        console.error('Error filtering questions:', error);
-        showError('Failed to filter questions. Please try again.');
-    }
-}
-
-async function deleteQuestion(questionId) {
-    if (!confirm('Are you sure you want to delete this question?')) {
-        return;
+    function ready() {
+        initTabs();
+        wireEvents();
+        // Initialize quiz area buttons disabled state properly
+        updateNav();
+        // Load initial admin list
+        refreshQuestions().catch(() => {});
     }
 
-    try {
-        showLoading('Deleting question...');
-
-        const response = await fetch(`${API_BASE_URL}/admin/delete/${questionId}`, {
-            method: 'DELETE'
-        });
-
-        if (response.ok) {
-            showSuccess('Question deleted successfully!');
-            loadAllQuestions();
-        } else {
-            throw new Error('Failed to delete question');
-        }
-    } catch (error) {
-        console.error('Error deleting question:', error);
-        showError('Failed to delete question. Please try again.');
-    }
-}
-
-// Utility functions
-function showLoading(message) {
-    // Remove existing messages
-    removeMessages();
-
-    const loadingElement = document.createElement('div');
-    loadingElement.className = 'loading';
-    loadingElement.textContent = message;
-    loadingElement.id = 'loading-message';
-
-    document.querySelector('.section.active').prepend(loadingElement);
-}
-
-function showError(message) {
-    removeMessages();
-
-    const errorElement = document.createElement('div');
-    errorElement.className = 'error';
-    errorElement.textContent = message;
-    errorElement.id = 'error-message';
-
-    document.querySelector('.section.active').prepend(errorElement);
-
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (errorElement.parentNode) {
-            errorElement.remove();
-        }
-    }, 5000);
-}
-
-function showSuccess(message) {
-    removeMessages();
-
-    const successElement = document.createElement('div');
-    successElement.className = 'success';
-    successElement.textContent = message;
-    successElement.id = 'success-message';
-
-    document.querySelector('.section.active').prepend(successElement);
-
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        if (successElement.parentNode) {
-            successElement.remove();
-        }
-    }, 3000);
-}
-
-function removeMessages() {
-    const messages = document.querySelectorAll('#loading-message, #error-message, #success-message');
-    messages.forEach(message => message.remove());
-}
+    document.addEventListener('DOMContentLoaded', ready);
+})();
