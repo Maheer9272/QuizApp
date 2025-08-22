@@ -18,9 +18,7 @@ import java.util.Optional;
 
 @Service
 public class QuestionService {
-    @Autowired
     private final QuestionServiceRepository questionServiceRepository;
-    @Autowired
     private final QuizServiceRepository quizServiceRepository;
 
     public QuestionService(QuestionServiceRepository questionServiceRepository, QuizServiceRepository quizServiceRepository) {
